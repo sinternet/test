@@ -8,9 +8,7 @@ const SPREADSHEET_ID = "14lmzOv4-5iCKRTiWw3jaX93OuNDfRaXDoShkHBGOHzE";
 // ทำการเชื่อมต่อกับ Google Sheet และชีทที่ต้องใช้บ่อยๆ
 const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
 const usersSheet = ss.getSheetByName("Users");
-const subjectsSheet = ss.getSheetByName("Subjects");
-const quizzesSheet = ss.getSheetByName("Quizzes");
-// (ชีทอื่นๆ จะถูกเรียกใช้ในฟังก์ชันที่เกี่ยวข้องต่อไป)
+// (ชีทอื่นๆ จะถูกเรียกใช้ในฟังก์ชันที่เกี่ยวข้อง)
 
 
 // =================================================================
@@ -18,35 +16,61 @@ const quizzesSheet = ss.getSheetByName("Quizzes");
 // =================================================================
 
 /**
- * ฟังก์ชันนี้จะทำงานเป็นอันดับแรกเมื่อมีคนเปิด URL ของเว็บแอป
- * และจะตรวจสอบ URL parameter เพื่อตัดสินใจว่าจะแสดงหน้าเว็บใด
- */
-/**
  * ฟังก์ชันนี้จะทำงานเป็นอันดับแรกและประมวลผลไฟล์ HTML ก่อนส่งไปแสดงผล
+ * เพื่อให้โค้ดพิเศษ (Scriptlets) ใน HTML ทำงานได้
  */
 function doGet(e) {
-  let pageTitle = "LMS";
-  let template;
+  // หน้าเริ่มต้นคือ Login เสมอ เราจะใช้การเปลี่ยนเนื้อหาแทนการ Redirect
+  // return HtmlService.createTemplateFromFile('Login')
+  //     .evaluate()
+  //     .setTitle("ระบบสอบออนไลน์");
 
-  switch (e.parameter.page) {
-    case 'register':
-      template = HtmlService.createTemplateFromFile('Register');
-      pageTitle = "LMS - ลงทะเบียน";
+  // ใช้ e.parameter.page เพื่อดูว่าผู้ใช้ขอหน้าอะไรมา, ถ้าไม่ระบุให้ไปหน้า Index
+  const page = e.parameter.page || 'Login'; 
+  let htmlOutput;
+
+  // ตรวจสอบว่ามี case ครบทุกหน้าหรือไม่
+  switch (page) {
+    case 'Login':
+      htmlOutput = HtmlService.createTemplateFromFile('Login').evaluate();
       break;
-    case 'admin':
-      template = HtmlService.createTemplateFromFile('AdminDashboard');
-      pageTitle = "LMS - Admin Dashboard";
+    case 'Register':
+      htmlOutput = HtmlService.createTemplateFromFile('Register').evaluate();
       break;
-    // --- ในอนาคตเราจะเพิ่ม case สำหรับ 'teacher' และ 'student' ตรงนี้ ---
+    case 'AdminDashboard':
+      htmlOutput = HtmlService.createTemplateFromFile('AdminDashboard').evaluate();
+      break;
+    case 'TeacherDashboard':
+      htmlOutput = HtmlService.createTemplateFromFile('TeacherDashboard').evaluate();
+      break;
+    case 'StudentDashboard':
+      htmlOutput = HtmlService.createTemplateFromFile('StudentDashboard').evaluate();
+      break;
+    case 'Quiz':
+      htmlOutput = HtmlService.createTemplateFromFile('Quiz').evaluate();
+      break;
+    case 'Report':
+      htmlOutput = HtmlService.createTemplateFromFile('Report').evaluate();
+      break;
     default:
-      // หน้าเริ่มต้นคือหน้า Login
-      template = HtmlService.createTemplateFromFile('Login');
-      pageTitle = "LMS - เข้าสู่ระบบ";
-      break;
+      // ถ้าขอหน้าที่ไม่มีในระบบ ให้ส่งกลับไปหน้าแรกเสมอ
+      htmlOutput = HtmlService.createTemplateFromFile('Login').evaluate();
   }
+  
+  // ตั้งค่าหัวข้อเว็บและอนุญาตให้ฝังใน Google Sites
+  return htmlOutput.setTitle('ระบบส่งแผนการสอนออนไลน์').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 
-  // .evaluate() คือหัวใจสำคัญที่ทำให้โค้ดพิเศษใน HTML ทำงาน
-  return template.evaluate().setTitle(pageTitle);
+
+}
+
+/**
+ * ฟังก์ชันสำหรับดึงเนื้อหา HTML จากไฟล์อื่นมาเป็นข้อความ
+ * (สำหรับใช้กับเทคนิค Single-Page Application)
+ * @param {string} filename - ชื่อไฟล์ HTML ที่ไม่รวม .html
+ * @returns {string} - เนื้อหา HTML ของไฟล์นั้น
+ */
+function include(filename) {
+  return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
 
 
@@ -68,7 +92,6 @@ function authenticateUser(username, password) {
       if (row[0] === username && row[1] === password) {
         const userStatus = row[6]; // Column G: Status
         if (userStatus === "Active") {
-          // *** ในอนาคต: สร้าง session หรือ token สำหรับการ login ***
           return { success: true, role: row[4], message: "เข้าสู่ระบบสำเร็จ!" };
         } else if (userStatus === "Pending") {
           return { success: false, message: "บัญชีของคุณยังรอการอนุมัติ" };
@@ -113,7 +136,7 @@ function processRegistration(formData) {
       formData.class, role, formData.email, status, "" // DriveFolderID
     ]);
     
-    // *** ในอนาคต: ส่งอีเมลแจ้ง Admin ว่ามีคนสมัครใหม่ ***
+    // TODO: ส่งอีเมลแจ้ง Admin ว่ามีคนสมัครใหม่
 
     if (status === "Pending") {
       return { success: true, message: "ลงทะเบียนสำเร็จ! บัญชีของคุณกำลังรอการอนุมัติ" };
@@ -126,28 +149,31 @@ function processRegistration(formData) {
   }
 }
 
+
+// =================================================================
+// == ฟังก์ชันสำหรับ Admin (Admin Functions)
+// =================================================================
+
 /**
  * (สำหรับ Admin) ดึงรายชื่อผู้ใช้ที่รอการอนุมัติ
  */
 function getPendingUsers() {
   try {
     const data = usersSheet.getDataRange().getValues();
-    const headers = data.shift(); // ดึงแถวหัวข้อออก
-
-    const pendingUsers = data.filter(row => row[6] === 'Pending') // คอลัมน์ G คือ Status
-      .map(row => {
-        // แปลง array เป็น object เพื่อให้ใช้ง่ายในฝั่ง Client
-        return {
-          username: row[0],
-          name: row[2],
-          email: row[5],
-          class: row[3]
-        };
-      });
+    const headers = data.shift();
+    
+    const pendingUsers = data
+      .filter(row => row[6] === 'Pending') // คอลัมน์ G คือ Status
+      .map(row => ({
+        username: row[0],
+        name: row[2],
+        email: row[5],
+        class: row[3]
+      }));
     return pendingUsers;
   } catch (e) {
     Logger.log(e);
-    return []; // ถ้ามีปัญหา ให้ส่ง array ว่างกลับไป
+    return [];
   }
 }
 
@@ -157,9 +183,10 @@ function getPendingUsers() {
 function approveUser(username) {
   try {
     const data = usersSheet.getDataRange().getValues();
-    for (let i = 1; i < data.length; i++) { // เริ่มจาก 1 เพื่อข้ามหัวข้อ
+    for (let i = 1; i < data.length; i++) {
       if (data[i][0] === username) {
-        usersSheet.getRange(i + 1, 7).setValue('Active'); // แถวที่ i+1, คอลัมน์ที่ 7 (G)
+        usersSheet.getRange(i + 1, 7).setValue('Active');
+        // TODO: ส่งอีเมลแจ้งผู้ใช้ว่าบัญชีถูกอนุมัติแล้ว
         return { success: true };
       }
     }
@@ -178,7 +205,8 @@ function rejectUser(username) {
     const data = usersSheet.getDataRange().getValues();
     for (let i = 1; i < data.length; i++) {
       if (data[i][0] === username) {
-        usersSheet.getRange(i + 1, 7).setValue('Rejected'); // แถวที่ i+1, คอลัมน์ที่ 7 (G)
+        usersSheet.getRange(i + 1, 7).setValue('Rejected');
+        // TODO: ส่งอีเมลแจ้งผู้ใช้ว่าบัญชีถูกปฏิเสธ
         return { success: true };
       }
     }
@@ -189,14 +217,30 @@ function rejectUser(username) {
   }
 }
 
+/**
+ * (สำหรับ Admin) สร้างไฟล์สำรองข้อมูล
+ */
+function backupData() {
+    // TODO: สร้างฟังก์ชันเพื่อคัดลอกไฟล์ Google Sheet ทั้งหมด
+    // ไปเก็บไว้ในโฟลเดอร์สำรองข้อมูลใน Google Drive
+    // พร้อมตั้งชื่อไฟล์ด้วยวันที่และเวลา
+    return { success: true, message: "สำรองข้อมูลสำเร็จ (ยังไม่สร้างไฟล์จริง)" };
+}
 
-// =================================================================
-// == ฟังก์ชันอื่นๆ (Placeholder สำหรับการพัฒนาในอนาคต)
-// =================================================================
+/**
+ * (สำหรับ Admin) แสดงรายการไฟล์ที่สำรองไว้
+ */
+function getBackupFiles() {
+    // TODO: สร้างฟังก์ชันเพื่ออ่านรายชื่อไฟล์ในโฟลเดอร์สำรองข้อมูล
+    // แล้ว return กลับไปเป็น Array
+    return [];
+}
 
-// TODO: สร้างฟังก์ชันสำหรับจัดการคลังข้อสอบ (สร้าง, แก้ไข, ลบ)
-// TODO: สร้างฟังก์ชันสำหรับจัดการชุดข้อสอบ (Test Templates)
-// TODO: สร้างฟังก์ชันสำหรับมอบหมายงาน (Assignments)
-// TODO: สร้างฟังก์ชันสำหรับดึงข้อมูลข้อสอบมาแสดงให้นักเรียน
-// TODO: สร้างฟังก์ชันสำหรับตรวจคำตอบและบันทึกผล
-// TODO: สร้างฟังก์ชันสำหรับระบบ Gamification, Announcements, Logs ฯลฯ
+/**
+ * (สำหรับ Admin) กู้คืนข้อมูลจากไฟล์ที่เลือก
+ */
+function restoreData(fileId) {
+    // TODO: สร้างฟังก์ชันที่ซับซ้อนและต้องใช้ความระมัดระวัง
+    // เพื่อคัดลอกข้อมูลจากไฟล์สำรองมาทับไฟล์ปัจจุบัน
+    return { success: true, message: "กู้คืนข้อมูลสำเร็จ (ยังไม่ทำงานจริง)" };
+}
